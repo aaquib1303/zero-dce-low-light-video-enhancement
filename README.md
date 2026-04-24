@@ -1,11 +1,5 @@
 # 🌙 Zero-DCE: Zero-Reference Low-Light Video Enhancement
 
-![Zero-DCE Demo](https://via.placeholder.com/800x400.png?text=Upload+Your+Side-by-Side+GIF+Here)
-
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-%23EE4C2C.svg?logo=PyTorch&logoColor=white)](https://pytorch.org/)
-[![OpenCV](https://img.shields.io/badge/OpenCV-%23white.svg?logo=opencv&logoColor=white)](https://opencv.org/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-%23FE4B4B.svg?logo=streamlit&logoColor=white)](https://streamlit.io/)
 
 > **Live Demo:** [Check out the web app here!](https://zero-dce-low-light-video-enhancement-khe2awlud8vtvl8rgtfkhb.streamlit.app/) 
 
