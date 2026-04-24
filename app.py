@@ -10,6 +10,7 @@ import cv2
 import tempfile
 import subprocess
 from core.model import DCENet, apply_curves
+import gc
 import os
 
 st.set_page_config(page_title="Zero-DCE | Low-Light Vision", page_icon="🌙", layout="wide")
@@ -59,22 +60,35 @@ def process_single_image(image: Image.Image):
     return Image.fromarray(enhanced_np), latency
 
 def process_video(video_file):
-    """Handles frame extraction, enhancement, and FFmpeg conversion (Single Video)."""
+    """Handles frame extraction, enhancement, and FFmpeg conversion with Cloud Memory limits."""
     tfile = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
     tfile.write(video_file.read())
     video_path = tfile.name
 
     cap = cv2.VideoCapture(video_path)
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    orig_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    orig_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    # ==========================================================
+    # MEMORY FIX: Downscale large videos for the cloud server
+    # ==========================================================
+    max_cloud_width = 640
+    if orig_width > max_cloud_width:
+        scale = max_cloud_width / orig_width
+        process_width = max_cloud_width
+        process_height = int(orig_height * scale)
+    else:
+        process_width = orig_width
+        process_height = orig_height
 
     out_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp4')
     out_path = out_file.name
     
     fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
-    out = cv2.VideoWriter(out_path, fourcc, fps, (width, height)) 
+    # Use the new scaled dimensions for the writer
+    out = cv2.VideoWriter(out_path, fourcc, fps, (process_width, process_height))
 
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -83,6 +97,10 @@ def process_video(video_file):
     for i in range(total_frames):
         ret, frame = cap.read()
         if not ret: break
+        
+        # Resize frame immediately to save RAM before PyTorch sees it
+        if orig_width > max_cloud_width:
+            frame = cv2.resize(frame, (process_width, process_height), interpolation=cv2.INTER_AREA)
             
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         pil_img = Image.fromarray(frame_rgb)
@@ -98,6 +116,13 @@ def process_video(video_file):
         progress = int(((i + 1) / total_frames) * 100)
         progress_bar.progress(progress)
         status_text.text(f"Processing Frame {i+1}/{total_frames}...")
+
+        # ==========================================================
+        # MEMORY FIX: Aggressive Garbage Collection
+        # ==========================================================
+        del tensor_img, enhanced_tensor, enhanced_np, frame_rgb, frame_bgr
+        if i % 10 == 0:
+            gc.collect()
 
     cap.release()
     out.release()
@@ -127,13 +152,13 @@ with tab1:
         
         with col1:
             st.markdown("#### Original Low-Light")
-            st.image(original_image, use_container_width=True)
+            st.image(original_image, width="stretch")
             
         with col2:
             st.markdown("#### Enhanced Output")
             with st.spinner("Executing 8x Light Enhancement..."):
                 enhanced_image, latency = process_single_image(original_image)
-                st.image(enhanced_image, use_container_width=True)
+                st.image(enhanced_image, width="stretch")
                 
         st.divider()
         m_col1, m_col2, m_col3 = st.columns(3)
@@ -143,7 +168,7 @@ with tab1:
 
         buf = io.BytesIO()
         enhanced_image.save(buf, format="PNG")
-        st.download_button("💾 Download Enhanced Image", buf.getvalue(), "Zero_DCE_Enhanced.png", "image/png", use_container_width=True)
+        st.download_button("💾 Download Enhanced Image", buf.getvalue(), "Zero_DCE_Enhanced.png", "image/png", width="stretch")
 
 
 with tab2:
@@ -151,7 +176,7 @@ with tab2:
     vid_file = st.file_uploader("Upload a dark video clip...", type=["mp4", "mov", "avi"], key="vid_uploader")
     
     if vid_file is not None:
-        if st.button("🚀 Start Video Processing", use_container_width=True):
+        if st.button("🚀 Start Video Processing", width="stretch"):
             with st.spinner("Initializing Video Pipeline..."):
                 final_video_path, total_time, avg_fps = process_video(vid_file)
                 
@@ -182,5 +207,5 @@ with tab2:
                 data=video_bytes,
                 file_name="Zero_DCE_Enhanced.mp4",
                 mime="video/mp4",
-                use_container_width=True
+                width="stretch"
             )
