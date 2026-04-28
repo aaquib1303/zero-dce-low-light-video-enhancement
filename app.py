@@ -71,9 +71,6 @@ def process_video(video_file):
     fps = cap.get(cv2.CAP_PROP_FPS)
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    # ==========================================================
-    # MEMORY FIX: Downscale large videos for the cloud server
-    # ==========================================================
     max_cloud_width = 640
     if orig_width > max_cloud_width:
         scale = max_cloud_width / orig_width
@@ -87,7 +84,6 @@ def process_video(video_file):
     out_path = out_file.name
     
     fourcc = cv2.VideoWriter_fourcc(*'mp4v') 
-    # Use the new scaled dimensions for the writer
     out = cv2.VideoWriter(out_path, fourcc, fps, (process_width, process_height))
 
     progress_bar = st.progress(0)
@@ -98,7 +94,6 @@ def process_video(video_file):
         ret, frame = cap.read()
         if not ret: break
         
-        # Resize frame immediately to save RAM before PyTorch sees it
         if orig_width > max_cloud_width:
             frame = cv2.resize(frame, (process_width, process_height), interpolation=cv2.INTER_AREA)
             
@@ -117,9 +112,7 @@ def process_video(video_file):
         progress_bar.progress(progress)
         status_text.text(f"Processing Frame {i+1}/{total_frames}...")
 
-        # ==========================================================
-        # MEMORY FIX: Aggressive Garbage Collection
-        # ==========================================================
+        
         del tensor_img, enhanced_tensor, enhanced_np, frame_rgb, frame_bgr
         if i % 10 == 0:
             gc.collect()
